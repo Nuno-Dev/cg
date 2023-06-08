@@ -573,7 +573,7 @@ function createHouse() {
   house.add(windowOne);
   house.add(windowTwo);
   house.add(windowThree);
-  createChimneySmoke();
+  // createChimneySmoke();
 
   house.add(chimney);
   house.position.set(house_position_x, house_position_y, house_position_z);
