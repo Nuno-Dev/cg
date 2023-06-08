@@ -1,56 +1,36 @@
 // Variáveis globais
 let scene, camera, renderer;
 let fieldTexture, skyTexture;
-let currentTexture = 0;
-let terrainTexture, heightmapTexture, heightData, terrain, material_terrain;
+let currentTexture;
+let heightmapTexture, heightMapData, terrain, material_terrain;
 let moon,
   moonLit = false;
-let ambientLight, directionalLight;
+let ambientLight, directionalLight, spotLight;
 let house, tree, ovni, skydome;
 let tree_array = [];
-const raioEsfera = 50;
+let scene_objects = [];
+const raioEsfera = 100;
 const segmentosEsfera = 64;
 const aneisEsfera = 64;
 let ovni_rotationSpeed = 0.005;
-let ovni_movement = 0.05;
+let ovni_movement = 0.1;
 let ovniLights = [];
 let lightStates;
-let keyState = {};
-
+let terrainIsLoaded = false;
+let objectsCreated = false;
 let leftArrowPressed = false;
 let rightArrowPressed = false;
 let upArrowPressed = false;
 let downArrowPressed = false;
-let animating = false;
-// Função para criar a cena
-function createScene() {
-  scene = new THREE.Scene();
-  createSkydome();
-}
-
-// Função para criar a câmera
-function createCamera() {
-  const pos_multiplier = 1;
-  cameraPerspectiva = new THREE.PerspectiveCamera(
-    75,
-    window.innerWidth / window.innerHeight,
-    0.1,
-    100
-  );
-  cameraPerspectiva.position.set(5 * pos_multiplier, 10, 20 * pos_multiplier);
-  cameraPerspectiva.lookAt(0, 5, 0);
-  camera = cameraPerspectiva;
-}
-
-// Função para criar objetos 3D
-function createObjects() {
-  createMoon();
-  createHouse();
-  generateMultipleTrees();
-  createOvni();
-  moveOvni();
-  rotateOvni();
-}
+let currentKey = "";
+let updateMaterial = false;
+let currentMaterialType;
+let controls;
+let chimney,
+  house_position_x,
+  house_position_y,
+  house_position_z,
+  particleSystem;
 
 ////////////////////////////////
 /* INITIALIZE ANIMATION CYCLE */
@@ -60,8 +40,11 @@ function init() {
   renderer = new THREE.WebGLRenderer({
     antialias: true,
   });
+  renderer.setPixelRatio(window.devicePixelRatio || 1);
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
+  renderer.xr.enabled = true;
+  document.body.appendChild(VRButton.createButton(renderer));
   createScene();
   loadTextures();
   createLighting();
@@ -69,104 +52,7 @@ function init() {
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
   window.addEventListener("resize", onResize);
-  animate();
-}
-
-function onKeyDown(e) {
-  switch (e.keyCode) {
-    case 49: // Tecla '1' - Câmera frontal
-      createFieldTexture();
-      createTerrain();
-      break;
-    case 50: // Tecla '2' - Câmera lateral
-      createSkyTexture();
-      createSkydome();
-      break;
-    case 80: // Tecla 'p' - Câmera frontal
-      lightStates = lightStates.map(function (state) {
-        return !state; // Inverter o estado
-      });
-      for (let i = 0; i < ovniLights.length; i++) {
-        if (ovniLights[i].visible == true) {
-          ovniLights[i].visible = false;
-        } else {
-          ovniLights[i].visible = true;
-        }
-      }
-      break;
-    case 16: // Tecla 'P' - Câmera frontal
-      lightStates = lightStates.map(function (state) {
-        return !state; // Inverter o estado
-      });
-      for (let i = 0; i < ovniLights.length; i++) {
-        if (ovniLights[i].visible == true) {
-          ovniLights[i].visible = false;
-        } else {
-          ovniLights[i].visible = true;
-        }
-      }
-      break;
-    case 37: // Tecla 'seta esquerda'
-      leftArrowPressed = true;
-      break;
-    case 39: // Tecla 'seta direita'
-      rightArrowPressed = true;
-      break;
-    case 38: // Tecla 'seta cima'
-      upArrowPressed = true;
-      break;
-    case 40: // Tecla 'seta baixo'
-      downArrowPressed = true;
-      break;
-  }
-}
-
-function onKeyUp(e) {
-  "use strict";
-  switch (e.keyCode) {
-    case 37: // Tecla 'seta esquerda'
-      leftArrowPressed = false;
-      break;
-    case 39: // Tecla 'seta direita'
-      rightArrowPressed = false;
-      break;
-    case 38: // Tecla 'seta cima'
-      upArrowPressed = false;
-      break;
-    case 40: // Tecla 'seta baixo'
-      downArrowPressed = false;
-      break;
-  }
-}
-
-function moveOvni() {
-  if (upArrowPressed && rightArrowPressed) {
-    ovni.position.z -= Math.sqrt(ovni_movement) / 2;
-    ovni.position.x += Math.sqrt(ovni_movement) / 2;
-  } else if (upArrowPressed && leftArrowPressed) {
-    ovni.position.z -= Math.sqrt(ovni_movement) / 2;
-    ovni.position.x -= Math.sqrt(ovni_movement) / 2;
-  } else if (downArrowPressed && rightArrowPressed) {
-    ovni.position.z += Math.sqrt(ovni_movement) / 2;
-    ovni.position.x += Math.sqrt(ovni_movement) / 2;
-  } else if (downArrowPressed && leftArrowPressed) {
-    ovni.position.z += Math.sqrt(ovni_movement) / 2;
-    ovni.position.x -= Math.sqrt(ovni_movement) / 2;
-  } else if (upArrowPressed) {
-    ovni.position.z -= ovni_movement;
-  } else if (downArrowPressed) {
-    ovni.position.z += ovni_movement;
-  } else if (leftArrowPressed) {
-    ovni.position.x -= ovni_movement;
-  } else if (rightArrowPressed) {
-    ovni.position.x += ovni_movement;
-  }
-  requestAnimationFrame(moveOvni);
-}
-
-function rotateOvni() {
-  ovni.rotation.y += ovni_rotationSpeed;
-  requestAnimationFrame(rotateOvni);
+  // controls = new THREE.OrbitControls(camera, renderer.domElement);
 }
 
 /////////////////////
@@ -174,13 +60,127 @@ function rotateOvni() {
 /////////////////////
 function animate() {
   "use strict";
+  update();
+  render();
+  renderer.setAnimationLoop(animate);
+}
+
+////////////
+/* RENDER */
+////////////
+
+function render() {
   renderer.render(scene, camera);
-  requestAnimationFrame(animate);
+}
+
+////////////
+/* UPDATE */
+////////////
+
+function update() {
+  "use strict";
+  if (terrainIsLoaded && !objectsCreated) {
+    createObjects();
+    objectsCreated = true;
+  }
+  if (objectsCreated) {
+    rotateOvni();
+    moveOvni();
+    updateChimneySmoke();
+    handleKeyboardInput();
+  }
 }
 
 ////////////////////////////
-/* RESIZE WINDOW CALLBACK */
+/*       HANDLERS         */
 ////////////////////////////
+
+function handleKeyboardInput() {
+  if (currentKey) {
+    switch (currentKey) {
+      case "1": // Tecla '1' - Terrain tEXTURE
+        createFieldTexture();
+        createTerrain();
+        break;
+      case "2": // Tecla '2' - skytexture
+        createSkyTexture();
+        createSkydome();
+        break;
+      case "D":
+      case "d": // Tecla 'D' - Luz direcional
+        directionalLight.visible = !directionalLight.visible;
+        break;
+      case "S":
+      case "s": // Tecla 'D' - Luz direcional
+        spotLight.visible = !spotLight.visible;
+        break;
+      case "P":
+      case "p": // Tecla 'p' - Câmera frontal
+        lightStates = lightStates.map(function (state) {
+          return !state; // Inverter o estado
+        });
+        for (let i = 0; i < ovniLights.length; i++) {
+          ovniLights[i].visible = !ovniLights[i].visible;
+        }
+        break;
+      case "ArrowLeft":
+        leftArrowPressed = true;
+        break;
+      case "ArrowRight":
+        rightArrowPressed = true;
+        break;
+      case "ArrowUp":
+        upArrowPressed = true;
+        break;
+      case "ArrowDown":
+        downArrowPressed = true;
+        break;
+      case "q":
+      case "Q":
+        currentMaterialType = "lambert";
+        updateMaterial = true;
+        break;
+      case "w":
+      case "W":
+        currentMaterialType = "phong";
+        updateMaterial = true;
+        break;
+      case "e":
+      case "E":
+        currentMaterialType = "toon";
+        updateMaterial = true;
+        break;
+    }
+    currentKey = "";
+    if (updateMaterial) {
+      updateSceneObjectsMaterial();
+    }
+  }
+}
+
+function onKeyDown(e) {
+  currentKey = e.key;
+}
+
+function onKeyUp(e) {
+  currentKey = "";
+  ("use strict");
+  switch (e.key) {
+    case "ArrowLeft":
+      leftArrowPressed = false;
+      break;
+    case "ArrowRight":
+      rightArrowPressed = false;
+      break;
+    case "ArrowUp":
+      upArrowPressed = false;
+      break;
+    case "ArrowDown":
+      downArrowPressed = false;
+      break;
+  }
+}
+
 function onResize() {
   "use strict";
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -192,7 +192,38 @@ function onResize() {
   }
 }
 
-function getHeightData(img) {
+////////////////////////////
+/*       TEXTURE LOADER   */
+////////////////////////////
+
+function loadTextures() {
+  let loader = new THREE.TextureLoader();
+  let localImageUrl = "images/heightmap.jpg";
+  let remoteImageUrl = "https://i.imgur.com/DLYhm6v.jpg";
+
+  loader.load(
+    localImageUrl,
+    function (texture) {
+      // If the local image loads successfully
+      heightmapTexture = texture;
+      heightMapData = getHeightMapData(heightmapTexture.image);
+      createTerrain();
+      terrainIsLoaded = true;
+    },
+    undefined,
+    function (error) {
+      // If the local image fails to load, try the remote image
+      loader.load(remoteImageUrl, function (texture) {
+        heightmapTexture = texture;
+        heightMapData = getHeightMapData(heightmapTexture.image);
+        createTerrain();
+        terrainIsLoaded = true;
+      });
+    }
+  );
+}
+
+function getHeightMapData(img) {
   let canvas = document.createElement("canvas");
   canvas.width = img.width;
   canvas.height = img.height;
@@ -207,117 +238,10 @@ function getHeightData(img) {
   let pix = imgd.data;
 
   for (let i = 0; i < pix.length; i += 4) {
-    data[i / 4] = pix[i] / 5;
+    data[i / 4] = pix[i] / 4.5;
   }
 
   return data;
-}
-
-function loadTextures() {
-  let loader = new THREE.TextureLoader();
-  let localImageUrl = "images/heightmap.jpg";
-  let remoteImageUrl = "https://i.imgur.com/QMi5CEu.jpg";
-
-  loader.load(
-    localImageUrl,
-    function (texture) {
-      // If the local image loads successfully
-      heightmapTexture = texture;
-      heightData = getHeightData(heightmapTexture.image);
-      createTerrain();
-      createObjects();
-    },
-    undefined,
-    function (error) {
-      // If the local image fails to load, try the remote image
-      loader.load(remoteImageUrl, function (texture) {
-        heightmapTexture = texture;
-        heightData = getHeightData(heightmapTexture.image);
-        createTerrain();
-        createObjects();
-      });
-    }
-  );
-}
-
-function createHouse() {
-  house = new THREE.Group();
-  const house_position_x = 6;
-  const house_position_z = -2;
-
-  const houseHeight = 5;
-  const houseHalfHeight = houseHeight / 2;
-
-  const house_position_y =
-    getTerrainHeight(
-      house_position_x,
-      house_position_z,
-      heightmapTexture.image.width,
-      heightData
-    ) + houseHalfHeight;
-
-  // Cria as formas geométricas para a casa
-  const wallGeometry = new THREE.BoxGeometry(3, 3, 3);
-  const roofGeometry = new THREE.ConeGeometry(2.3, 2, 4);
-  const doorGeometry = new THREE.BoxGeometry(0.5, 1, 0.01);
-  const windowGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.01);
-
-  // Cria o material para as formas
-  const wallMaterial = new THREE.MeshBasicMaterial({ color: 0xaaaaaa });
-  const roofMaterial = new THREE.MeshBasicMaterial({ color: 0x663300 });
-  const doorMaterial = new THREE.MeshBasicMaterial({ color: 0x663300 });
-  const windowMaterial = new THREE.MeshBasicMaterial({ color: 0xadd8e6 });
-
-  // Cria as malhas para a casa
-  const wall = new THREE.Mesh(wallGeometry, wallMaterial);
-  const roof = new THREE.Mesh(roofGeometry, roofMaterial);
-  const door = new THREE.Mesh(doorGeometry, doorMaterial);
-  const windowLeft = new THREE.Mesh(windowGeometry, windowMaterial);
-  const windowRight = new THREE.Mesh(windowGeometry, windowMaterial);
-
-  // Posiciona as partes da casa
-  roof.rotation.y = Math.PI / 3.5;
-  roof.position.y = 2.6;
-  door.position.y = -0.8;
-  door.position.z = 2;
-  windowLeft.position.y = windowRight.position.y = 0.8;
-  windowLeft.position.z = windowRight.position.z = 2.1;
-  windowLeft.position.x = -0.4;
-  windowRight.position.x = 0.7;
-
-  // Adiciona as partes da casa ao grupo
-  house.add(wall);
-  house.add(roof);
-  house.add(door);
-  house.add(windowLeft);
-  house.add(windowRight);
-  house.position.set(house_position_x, house_position_y, house_position_z);
-  scene.add(house);
-}
-
-// Create the geometry using heightmap and texture
-function createTerrain() {
-  let geometry = new THREE.PlaneBufferGeometry(20, 20, 256, 256);
-
-  let positionArray = geometry.attributes.position.array;
-  for (let i = 0; i < positionArray.length; i += 3) {
-    positionArray[i + 2] = heightData[i / 3] * 0.1;
-  }
-
-  geometry.attributes.position.needsUpdate = true; // inform three.js that the vertices have changed
-  geometry.rotateX(-Math.PI / 2); // Rotate the geometry so it lies in the xOz plane
-  material_terrain = new THREE.MeshBasicMaterial({ map: terrainTexture });
-  terrain = new THREE.Mesh(geometry, material_terrain);
-  if (currentTexture == fieldTexture) {
-    createFieldTexture();
-    currentTexture.repeat.set(2, 2);
-    currentTexture.wrapS = THREE.RepeatWrapping;
-    currentTexture.wrapT = THREE.RepeatWrapping;
-    material_terrain.map = currentTexture;
-    terrain = new THREE.Mesh(geometry, material_terrain);
-  }
-
-  scene.add(terrain);
 }
 
 function createFieldTexture() {
@@ -366,135 +290,24 @@ function createSkyTexture() {
   currentTexture = skyTexture;
 }
 
-function createMoon() {
-  let geometry = new THREE.SphereGeometry(1, 32, 32);
-  let material = new THREE.MeshPhongMaterial({ emissive: 0xffff00 });
-  moon = new THREE.Mesh(geometry, material);
-  moon.position.set(0, 14, 0);
+// Create the geometry using heightmap and texture
+function createTerrain() {
+  let geometry = new THREE.PlaneBufferGeometry(50, 50, 256, 256);
 
-  scene.add(moon);
-}
-
-function createSkydome() {
-  let esferaGeometry = new THREE.SphereGeometry(
-    15,
-    32,
-    32,
-    -0.1,
-    Math.PI * 1.1
-  );
-  const material = new THREE.MeshBasicMaterial({
-    map: skyTexture,
-    side: THREE.BackSide,
-  });
-  // Criar a esfera
-  skydome = new THREE.Mesh(esferaGeometry, material);
-
-  skydome.position.set(0, 1, 0);
-  skydome.rotation.x = -Math.PI / 2 - 0.1;
-  scene.add(skydome);
-}
-
-function createLighting() {
-  ambientLight = new THREE.AmbientLight(0x404040); // soft white light
-  scene.add(ambientLight);
-
-  directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-  directionalLight.position.set(0, -10, 0).normalize();
-  directionalLight.visible = true;
-  scene.add(directionalLight);
-}
-
-function createTree() {
-  const tree = new THREE.Group();
-  const canopy_y = 2.4;
-
-  const trunkGeometry = new THREE.CylinderGeometry(0.2, 0.2, canopy_y);
-  const branchGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1);
-  const barkMaterial = new THREE.MeshBasicMaterial({ color: 0xcd853f }); // castanho-alaranjado
-
-  const trunk = new THREE.Mesh(trunkGeometry, barkMaterial);
-  const mainBranch = new THREE.Mesh(branchGeometry, barkMaterial);
-
-  trunk.position.y = 1;
-
-  mainBranch.position.y = 1.5;
-  mainBranch.position.x = 0.4;
-  mainBranch.rotation.z = -Math.PI / 5;
-
-  const canopyGeometry = new THREE.SphereGeometry(0.5, 20, 20);
-  const canopyMaterial = new THREE.MeshBasicMaterial({ color: 0x006400 }); // verde-escuro
-
-  const canopy1 = new THREE.Mesh(canopyGeometry, canopyMaterial);
-  canopy1.position.set(0.5, canopy_y, 0);
-
-  const canopy2 = new THREE.Mesh(canopyGeometry, canopyMaterial);
-  canopy2.position.set(-0.5, canopy_y, 0);
-
-  const canopy3 = new THREE.Mesh(canopyGeometry, canopyMaterial);
-  canopy3.position.set(0, canopy_y, 0.3);
-
-  tree.add(trunk);
-  tree.add(mainBranch);
-  tree.add(canopy1);
-  tree.add(canopy2);
-  tree.add(canopy3);
-
-  return tree;
-}
-
-function getRandomArbitrary(min, max, favoredMin, favoredMax) {
-  let num;
-  if (Math.random() < 2 / 3) {
-    num = Math.random() * (favoredMax - favoredMin) + favoredMin;
-  } else {
-    if (Math.random() < 0.5) {
-      num = Math.random() * (favoredMin - min) + min;
-    } else {
-      num = Math.random() * (max - favoredMax) + favoredMax;
-    }
+  let positionArray = geometry.attributes.position.array;
+  for (let i = 0; i < positionArray.length; i += 3) {
+    positionArray[i + 2] = heightMapData[i / 3] * 0.1;
   }
-  return num;
-}
 
-function generateMultipleTrees() {
-  const terrain_width = 9;
-  const tree_count = 10;
-  for (let i = 0; i < tree_count; i++) {
-    const tree = createTree();
-
-    let x, z;
-    let overlapping;
-    do {
-      x = getRandomArbitrary(-terrain_width, terrain_width, -6, terrain_width);
-      z = getRandomArbitrary(-terrain_width, terrain_width, -6, terrain_width);
-
-      overlapping = false;
-      // Check for overlap with existing trees
-      for (let j = 0; j < tree_array.length; j++) {
-        const existingTree = tree_array[j];
-        const distance = tree.position.distanceTo(existingTree.position);
-        if (distance < 1) {
-          overlapping = true;
-          break;
-        }
-      }
-      // Check for being too close to the house
-      const distanceToHouse = tree.position.distanceTo(house.position);
-      if (distanceToHouse < 3) {
-        overlapping = true;
-      }
-    } while (overlapping);
-
-    const y = getTerrainHeight(x, z, 50);
-
-    tree.position.set(x, y, z);
-    tree.scale.y = Math.random() * 0.5 + 0.75;
-    tree.rotation.y = Math.random() * Math.PI * 2;
-
-    scene.add(tree);
-    tree_array.push(tree);
+  geometry.rotateX(-Math.PI / 2); // Rotate the geometry so it lies in the xOz plane
+  material_terrain = new THREE.MeshPhongMaterial();
+  terrain = new THREE.Mesh(geometry, material_terrain);
+  if (currentTexture == fieldTexture) {
+    material_terrain.map = currentTexture;
   }
+  terrain = new THREE.Mesh(geometry, material_terrain);
+
+  scene.add(terrain);
 }
 
 function getTerrainHeight(x, z, width) {
@@ -502,7 +315,420 @@ function getTerrainHeight(x, z, width) {
   const Z = Math.floor((z + 15) * 10);
 
   const pos = Z * width + X;
-  return heightData[pos] * 0.1;
+  return heightMapData[pos] * 0.1;
+}
+
+function updateSceneObjectsMaterial() {
+  for (let i = 0; i < scene_objects.length; i++) {
+    let object = scene_objects[i];
+    if (object instanceof THREE.Mesh) {
+      let color = object.material.color;
+      let emissive = object.material.emissive;
+      let side = object.material.side;
+      let map = object.material.map;
+      let transparent = object.material.transparent;
+      let opacity = object.material.opacity;
+      switch (currentMaterialType) {
+        case "lambert":
+          object.material = new THREE.MeshLambertMaterial({
+            ...(color && { color }),
+            ...(emissive && { emissive }),
+            ...(side && { side }),
+            ...(map && { map }),
+            ...(opacity && { opacity }),
+            ...(transparent && { transparent }),
+          });
+          break;
+        case "phong":
+          object.material = new THREE.MeshPhongMaterial({
+            ...(color && { color }),
+            ...(emissive && { emissive }),
+            ...(side && { side }),
+            ...(map && { map }),
+            ...(opacity && { opacity }),
+            ...(transparent && { transparent }),
+          });
+          break;
+        case "toon":
+          object.material = new THREE.MeshToonMaterial({
+            ...(color && { color }),
+            ...(emissive && { emissive }),
+            ...(side && { side }),
+            ...(map && { map }),
+            ...(opacity && { opacity }),
+            ...(transparent && { transparent }),
+          });
+          break;
+      }
+    }
+  }
+  updateMaterial = false;
+}
+
+////////////////////////////
+/*       SCENE & OBJECTS  */
+////////////////////////////
+
+function createScene() {
+  scene = new THREE.Scene();
+  scene.position.set(0, -10, -10);
+  scene.position.y = -10;
+  createSkydome();
+}
+
+function createCamera() {
+  cameraPerspectiva = new THREE.PerspectiveCamera(
+    75,
+    window.innerWidth / window.innerHeight,
+    0.1,
+    100
+  );
+  cameraPerspectiva.position.set(-5, 2, 10);
+  cameraPerspectiva.lookAt(0, 0, 0);
+  camera = cameraPerspectiva;
+}
+
+function createObjects() {
+  createMoon();
+  createHouse();
+  generateMultipleTrees();
+  createOvni();
+}
+
+function createHouse() {
+  house = new THREE.Group();
+  house_position_x = 3;
+  house_position_z = -2;
+
+  const houseHeight = 5;
+  const houseHalfHeight = houseHeight / 2;
+
+  house_position_y =
+    getTerrainHeight(
+      house_position_x,
+      house_position_z,
+      heightmapTexture.image.width
+    ) +
+    houseHalfHeight / 3;
+
+  // Wall vertices and indices
+  let wallPoints = [
+    [-3.0, -1.5, 1.5], // Point 1
+    [3.0, -1.5, 1.5], // Point 2
+    [3.0, 1.5, 1.5], // Point 3
+    [-3.0, 1.5, 1.5], // Point 4
+    [-3.0, -1.5, -1.5], // Point 5
+    [3.0, -1.5, -1.5], // Point 6
+    [3.0, 1.5, -1.5], // Point 7
+    [-3.0, 1.5, -1.5], // Point 8
+  ];
+
+  let wallTriangles = [
+    [0, 1, 2], // Front face - Triangle 1
+    [0, 2, 3], // Front face - Triangle 2
+    [4, 5, 6], // Back face - Triangle 3
+    [4, 6, 7], // Back face - Triangle 4
+    [4, 0, 3], // Left face - Triangle 5
+    [4, 3, 7], // Left face - Triangle 6
+    [5, 1, 2], // Right face - Triangle 7
+    [5, 2, 6], // Right face - Triangle 8
+  ];
+
+  let wallVertices = new Float32Array(wallPoints.flat());
+  let wallIndices = new Uint32Array(wallTriangles.flat());
+
+  let wallGeometry = new THREE.BufferGeometry();
+  wallGeometry
+    .setAttribute("position", new THREE.BufferAttribute(wallVertices, 3))
+    .setIndex(new THREE.BufferAttribute(wallIndices, 1))
+    .computeVertexNormals();
+
+  // Door vertices and indices
+  let doorPoints = [
+    [-0.25, -1.5, 1.51], // Point 1
+    [0.25, -1.5, 1.51], // Point 2
+    [0.25, 0.0, 1.51], // Point 3
+    [-0.25, 0.0, 1.51], // Point 4
+  ];
+  let doorTriangles = [
+    [0, 1, 2], // Triangle 1
+    [0, 2, 3], // Triangle 2
+  ];
+  let doorVertices = new Float32Array(doorPoints.flat());
+  let doorIndices = new Uint32Array(doorTriangles.flat());
+  let doorGeometry = new THREE.BufferGeometry();
+  doorGeometry
+    .setAttribute("position", new THREE.BufferAttribute(doorVertices, 3))
+    .setIndex(new THREE.BufferAttribute(doorIndices, 1))
+    .computeVertexNormals();
+
+  // Window vertices and indices
+  let windowPoints = [
+    [-0.25, 0.25, 1.51], // Point 1
+    [0.25, 0.25, 1.51], // Point 2
+    [0.25, 0.75, 1.51], // Point 3
+    [-0.25, 0.75, 1.51], // Point 4
+  ];
+  let windowTriangles = [
+    [0, 1, 2], // Triangle 1
+    [0, 2, 3], // Triangle 2
+  ];
+  let windowVertices = new Float32Array(windowPoints.flat());
+  let windowIndices = new Uint32Array(windowTriangles.flat());
+
+  let windowGeometry = new THREE.BufferGeometry();
+  windowGeometry
+    .setAttribute("position", new THREE.BufferAttribute(windowVertices, 3))
+    .setIndex(new THREE.BufferAttribute(windowIndices, 1))
+    .computeVertexNormals();
+
+  let roofPoints = [
+    [-3.0, 1.5, 1.5], // Point 1
+    [3.0, 1.5, 1.5], // Point 2
+    [3.0, 1.5, -1.5], // Point 3
+    [-3.0, 1.5, -1.5], // Point 4
+    [0.0, 3.5, 0.0], // Point 5 (top of the roof)
+  ];
+
+  let roofTriangles = [
+    [0, 1, 4], // Triangle 1
+    [1, 2, 4], // Triangle 2
+    [2, 3, 4], // Triangle 3
+    [3, 0, 4], // Triangle 4
+  ];
+  let roofVertices = new Float32Array(roofPoints.flat());
+  let roofIndices = new Uint32Array(roofTriangles.flat());
+
+  let roofGeometry = new THREE.BufferGeometry();
+  roofGeometry
+    .setAttribute("position", new THREE.BufferAttribute(roofVertices, 3))
+    .setIndex(new THREE.BufferAttribute(roofIndices, 1))
+    .computeVertexNormals();
+  const chimneyFrontWidth = 0.4; // higher is smaller
+  let chimneyPoints = [
+    [chimneyFrontWidth, 3.5, 0.3], // Point 1
+    [0.9, 3.5, 0.3], // Point 2
+    [0.9, 4.5, 0.3], // Point 3
+    [chimneyFrontWidth, 4.5, 0.3], // Point 4
+    [chimneyFrontWidth, 3.5, -0.3], // Point 5
+    [0.9, 3.5, -0.3], // Point 6
+    [0.9, 4.5, -0.3], // Point 7
+    [chimneyFrontWidth, 4.5, -0.3], // Point 8
+  ];
+
+  let chimneyTriangles = [
+    [0, 1, 2], // Front face - Triangle 1
+    [0, 2, 3], // Front face - Triangle 2
+    [4, 5, 6], // Back face - Triangle 3
+    [4, 6, 7], // Back face - Triangle 4
+    [4, 0, 3], // Left face - Triangle 5
+    [4, 3, 7], // Left face - Triangle 6
+    [5, 1, 2], // Right face - Triangle 7
+    [5, 2, 6], // Right face - Triangle 8
+    [2, 3, 7], // Top face - Triangle 9
+    [2, 7, 6], // Top face - Triangle 10
+    [0, 1, 5], // Bottom face - Triangle 11
+    [0, 5, 4], // Bottom face - Triangle 12
+  ];
+  let chimneyVertices = new Float32Array(chimneyPoints.flat());
+  let chimneyIndices = new Uint32Array(chimneyTriangles.flat());
+  let chimneyGeometry = new THREE.BufferGeometry();
+  chimneyGeometry
+    .setAttribute("position", new THREE.BufferAttribute(chimneyVertices, 3))
+    .setIndex(new THREE.BufferAttribute(chimneyIndices, 1))
+    .computeVertexNormals();
+
+  // Cria o material para as formas
+  const wallMaterial = new THREE.MeshToonMaterial({
+    color: 0xffffff,
+    side: THREE.DoubleSide,
+  });
+  const roofMaterial = new THREE.MeshToonMaterial({ color: 0xffa500 });
+  const doorMaterial = new THREE.MeshToonMaterial({ color: 0x00008b });
+  const windowMaterial = new THREE.MeshToonMaterial({ color: 0x00008b });
+  const chimneyMaterial = new THREE.MeshToonMaterial({
+    color: 0x000000,
+    side: THREE.DoubleSide,
+  });
+
+  const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+  const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+  const door = new THREE.Mesh(doorGeometry, doorMaterial);
+  const windowOne = new THREE.Mesh(windowGeometry, windowMaterial);
+  const windowTwo = new THREE.Mesh(windowGeometry, windowMaterial);
+  const windowThree = new THREE.Mesh(windowGeometry, windowMaterial);
+  chimney = new THREE.Mesh(chimneyGeometry, chimneyMaterial);
+
+  // Posiciona as partes da casa
+  door.position.x = -1;
+  windowOne.position.x = -2.2;
+  windowTwo.position.x = 0.2;
+  windowThree.position.x = 1.5;
+  chimney.position.set(0.5, -1.5, 0.8);
+
+  // Adiciona as partes da casa ao grupo
+  house.add(wall);
+  house.add(roof);
+  house.add(door);
+  house.add(windowOne);
+  house.add(windowTwo);
+  house.add(windowThree);
+  createChimneySmoke();
+
+  house.add(chimney);
+  house.position.set(house_position_x, house_position_y, house_position_z);
+  scene.add(house);
+  scene_objects.push(
+    wall,
+    roof,
+    door,
+    windowOne,
+    windowTwo,
+    windowThree,
+    chimney
+  );
+}
+
+function createMoon() {
+  let geometry = new THREE.SphereGeometry(2, 32, 32);
+  let material = new THREE.MeshPhongMaterial({ emissive: 0xfff244 });
+  moon = new THREE.Mesh(geometry, material);
+  moon.position.set(8, 20, -7);
+  scene.add(moon);
+  scene_objects.push(moon);
+}
+
+function createSkydome() {
+  // The additional two arguments define the vertical scale as a half-sphere
+  let hemisphereGeometry = new THREE.SphereGeometry(
+    25,
+    32,
+    32,
+    0,
+    Math.PI * 2,
+    0,
+    Math.PI / 2
+  );
+  const material = new THREE.MeshPhongMaterial({
+    map: skyTexture,
+    side: THREE.BackSide,
+  });
+
+  skydome = new THREE.Mesh(hemisphereGeometry, material);
+  skydome.position.set(0, 1.4, 0);
+  scene.add(skydome);
+}
+
+function createLighting() {
+  const lightIntensity = 0.5;
+  ambientLight = new THREE.AmbientLight(0x404040); // soft white light
+  scene.add(ambientLight);
+
+  directionalLight = new THREE.DirectionalLight(0xffffcc, lightIntensity); //soft yellow
+  directionalLight.position.set(0, -10, 0).normalize();
+  directionalLight.visible = false;
+  scene.add(directionalLight);
+}
+
+function createTree() {
+  const tree = new THREE.Group();
+  const trunkHeight = Math.random() * (0.7 - 0.4) + 0.4; // random between 0.4 and 0.7
+  const trunkGeometry = new THREE.CylinderGeometry(0.1, 0.1, trunkHeight);
+  const branchGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1);
+  const branchMaterial = new THREE.MeshToonMaterial({ color: 0xcd853f }); // castanho-alaranjado
+
+  const trunk = new THREE.Mesh(trunkGeometry, branchMaterial);
+  const mainBranch = new THREE.Mesh(branchGeometry, branchMaterial);
+  const secondBranch = new THREE.Mesh(branchGeometry, branchMaterial);
+  trunk.position.y = 1;
+
+  mainBranch.position.y = 1.5;
+  mainBranch.position.x = 0.3;
+  mainBranch.rotation.z = -Math.PI / 5;
+  secondBranch.position.x = -0.3;
+  secondBranch.position.y = 1.5;
+  secondBranch.rotation.z = Math.PI / 5;
+
+  const radiusX = 0.7; // Radius along the x-axis
+  const radiusY = 0.5; // Radius along the y-axis
+  const radiusZ = 0.8; // Radius along the z-axis
+  const widthSegments = 20;
+  const heightSegments = 20;
+
+  const ellipsoidGeometry = new THREE.SphereGeometry(
+    radiusX,
+    widthSegments,
+    heightSegments
+  );
+  ellipsoidGeometry.scale(radiusX, radiusY, radiusZ);
+
+  // Create the ellipsoid mesh
+  const ellipsoidMaterial = new THREE.MeshToonMaterial({ color: 0x003300 });
+
+  const canopy1 = new THREE.Mesh(ellipsoidGeometry, ellipsoidMaterial);
+  canopy1.position.set(0.7, 2, -0.15); // Adjusted position to touch canopy2
+
+  const canopy2 = new THREE.Mesh(ellipsoidGeometry, ellipsoidMaterial);
+  canopy2.position.set(-0.7, 2, -0.15); // Adjusted position to touch canopy1
+
+  const canopy3 = new THREE.Mesh(ellipsoidGeometry, ellipsoidMaterial);
+  canopy3.position.set(0, 2.4, -0.15);
+
+  tree.add(trunk);
+  tree.add(mainBranch);
+  tree.add(secondBranch);
+  tree.add(canopy1);
+  tree.add(canopy2);
+  tree.add(canopy3);
+  scene_objects.push(
+    trunk,
+    mainBranch,
+    secondBranch,
+    canopy1,
+    canopy2,
+    canopy3
+  );
+
+  return tree;
+}
+
+function getRandomArbitrary(min, max) {
+  return Math.random() * (max - min) + min;
+}
+
+function generateMultipleTrees() {
+  const terrain_width = 20;
+  const tree_count = 35;
+  for (let i = 0; i < tree_count; i++) {
+    const tree = createTree();
+
+    let x, z;
+    let validPosition;
+    do {
+      x = getRandomArbitrary(-terrain_width, terrain_width);
+      z = getRandomArbitrary(-terrain_width, terrain_width);
+
+      validPosition =
+        (z >= 5 && x <= 0) || x <= -2 || z >= 5 || x >= 10 || z <= -10;
+      // Check for overlap with existing trees
+      for (let j = 0; j < tree_array.length; j++) {
+        const existingTree = tree_array[j];
+        const distance = tree.position.distanceTo(existingTree.position);
+        if (distance < 2) {
+          validPosition = false;
+          break;
+        }
+      }
+    } while (!validPosition);
+
+    const y = getTerrainHeight(x, z, 50);
+
+    tree.position.set(x, y, z);
+    tree.rotation.y = Math.random() * Math.PI * 2;
+
+    scene.add(tree);
+    tree_array.push(tree);
+  }
 }
 
 function createOvni() {
@@ -511,7 +737,7 @@ function createOvni() {
   // Corpo do OVNI (esfera achatada)
   let bodyGeometry = new THREE.SphereGeometry(5, 32, 16);
   bodyGeometry.scale(1, 0.4, 1);
-  let bodyMaterial = new THREE.MeshPhongMaterial({ color: 0x000000 });
+  let bodyMaterial = new THREE.MeshToonMaterial({ color: 0x000000 });
   let body = new THREE.Mesh(bodyGeometry, bodyMaterial);
   ovni.add(body);
 
@@ -525,14 +751,14 @@ function createOvni() {
     0,
     Math.PI / 2
   );
-  let cockpitMaterial = new THREE.MeshBasicMaterial({ color: 0x808080 });
+  let cockpitMaterial = new THREE.MeshToonMaterial({ color: 0x808080 });
   let cockpit = new THREE.Mesh(cockpitGeometry, cockpitMaterial);
   ovni.add(cockpit);
 
   // Cilindro achatado na parte de baixo
   let lightColor = 0xffffff;
   let cylinderGeometry = new THREE.CylinderGeometry(1, 1, 4, 8);
-  let cylinderMaterial = new THREE.MeshPhongMaterial({
+  let cylinderMaterial = new THREE.MeshToonMaterial({
     color: lightColor,
     transparent: true,
     opacity: 0.5,
@@ -544,12 +770,12 @@ function createOvni() {
   // Luzes pontuais nas pequenas esferas
   // Lights
 
-  let lightSphereMaterial = new THREE.MeshPhongMaterial({
+  let lightSphereMaterial = new THREE.MeshToonMaterial({
     color: lightColor,
     transparent: true, // Habilita a transparência
     opacity: 1, // Define a opacidade das esferas (0 = totalmente transparente, 1 = totalmente opaco)
   });
-  let lightIntensity = 10;
+  let lightIntensity = 0.03;
   for (let i = 0; i < 12; i++) {
     let light = new THREE.PointLight(0xffa500, lightIntensity);
     let lightSphereGeometry = new THREE.SphereGeometry(0.2);
@@ -562,19 +788,18 @@ function createOvni() {
     );
     light.position.copy(lightSphere.position);
     ovni.add(lightSphere);
+    scene_objects.push(lightSphere);
     lightSphere.add(light);
     ovniLights.push(light);
   }
   lightStates = new Array(ovniLights.length).fill(true);
 
-  let spotLight = new THREE.SpotLight(0xffa500, 1, 0, Math.PI / 6);
-  spotLight.position.copy(cylinder.position);
+  spotLight = new THREE.SpotLight(0xffa500, 1, 0, Math.PI / 12);
   let spotLightTarget = new THREE.Object3D();
   spotLightTarget.position.copy(terrain.position); // Definir a posição do chão como alvo
   cylinder.add(spotLightTarget);
   spotLight.target = spotLightTarget;
   cylinder.add(spotLight);
-  scene.add(spotLight);
 
   // Movement and rotation
   ovni.userData = {
@@ -586,7 +811,106 @@ function createOvni() {
   };
   // Adjust the scale and position
   ovni.scale.set(0.25, 0.25, 0.25);
-  ovni.position.y = 9;
+  ovni.position.y = 9.5;
   ovni.position.z = 6;
   scene.add(ovni);
+  scene_objects.push(body, cockpit, cylinder);
+}
+
+function moveOvni() {
+  if (upArrowPressed && rightArrowPressed) {
+    ovni.position.z -= ovni_movement;
+    ovni.position.x += ovni_movement;
+  } else if (upArrowPressed && leftArrowPressed) {
+    ovni.position.z -= ovni_movement;
+    ovni.position.x -= ovni_movement;
+  } else if (downArrowPressed && rightArrowPressed) {
+    ovni.position.z += ovni_movement;
+    ovni.position.x += ovni_movement;
+  } else if (downArrowPressed && leftArrowPressed) {
+    ovni.position.z += ovni_movement;
+    ovni.position.x -= ovni_movement;
+  } else if (upArrowPressed) {
+    ovni.position.z -= ovni_movement;
+  } else if (downArrowPressed) {
+    ovni.position.z += ovni_movement;
+  } else if (leftArrowPressed) {
+    ovni.position.x -= ovni_movement;
+  } else if (rightArrowPressed) {
+    ovni.position.x += ovni_movement;
+  }
+}
+
+function rotateOvni() {
+  ovni.rotation.y += ovni_rotationSpeed;
+}
+
+function createChimneySmoke() {
+  let particleCount = 5;
+  let particles = new THREE.BufferGeometry();
+  let positions = [];
+  let particleObjects = [];
+
+  let pMaterial = new THREE.PointsMaterial({
+    color: 0xcccccc,
+    size: 0.2,
+    blending: THREE.AdditiveBlending,
+    transparent: true,
+  });
+
+  for (let p = 0; p < particleCount; p++) {
+    let particle = new SmokeParticle();
+    particleObjects.push(particle);
+    positions.push(
+      particle.position.x,
+      particle.position.y,
+      particle.position.z
+    );
+  }
+
+  particles.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(positions, 3)
+  );
+
+  particleSystem = new THREE.Points(particles, pMaterial);
+  particleSystem.name = "smoke";
+  particleSystem.userData.particleObjects = particleObjects;
+  chimney.add(particleSystem);
+}
+
+function updateChimneySmoke() {
+  let particleSystem = scene.getObjectByName("smoke");
+  if (particleSystem) {
+    let particleSystem = scene.getObjectByName("smoke");
+
+    let positions = particleSystem.geometry.attributes.position.array;
+
+    for (let i = 0; i < positions.length / 3; i++) {
+      let particle = particleSystem.userData.particleObjects[i];
+      particle.update(0.2);
+      positions[i * 3] = particle.position.x;
+      positions[i * 3 + 1] = particle.position.y;
+      positions[i * 3 + 2] = particle.position.z;
+    }
+    particleSystem.geometry.attributes.position.needsUpdate = true;
+  }
+}
+
+class SmokeParticle {
+  constructor() {
+    this.position = chimney.position.clone();
+    this.position.y = 4.3;
+    this.position.z -= 0.7 + Math.random() * 0.2 - 0.1;
+    this.position.x += 0.2 + Math.random() * 0.2 - 0.1;
+    this.velocity = new THREE.Vector3(0, Math.random() * 0.02, 0);
+  }
+
+  update(delta) {
+    this.position.add(this.velocity.clone().multiplyScalar(delta));
+
+    if (this.position.y > 5.4) {
+      this.position.y = 4.3; // Adjust to the height of your chimney
+    }
+  }
 }
