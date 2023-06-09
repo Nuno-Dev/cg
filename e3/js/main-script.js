@@ -44,6 +44,8 @@ function init() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
   renderer.xr.enabled = true;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   document.body.appendChild(VRButton.createButton(renderer));
   createScene();
   loadTextures();
@@ -52,7 +54,12 @@ function init() {
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
   window.addEventListener("resize", onResize);
-  // controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableKeys = false;
+  let button = document.getElementById("VRButton");
+  button.addEventListener("click", function () {
+    controls.dispose();
+  });
 }
 
 /////////////////////
@@ -98,26 +105,26 @@ function update() {
 function handleKeyboardInput() {
   if (currentKey) {
     switch (currentKey) {
-      case "1": // Tecla '1' - Terrain tEXTURE
+      case "1":
         createFieldTexture();
         createTerrain();
         break;
-      case "2": // Tecla '2' - skytexture
+      case "2":
         createSkyTexture();
         createSkydome();
         break;
       case "D":
-      case "d": // Tecla 'D' - Luz direcional
+      case "d":
         directionalLight.visible = !directionalLight.visible;
         break;
       case "S":
-      case "s": // Tecla 'D' - Luz direcional
+      case "s":
         spotLight.visible = !spotLight.visible;
         break;
       case "P":
-      case "p": // Tecla 'p' - Câmera frontal
+      case "p":
         lightStates = lightStates.map(function (state) {
-          return !state; // Inverter o estado
+          return !state;
         });
         for (let i = 0; i < ovniLights.length; i++) {
           ovniLights[i].visible = !ovniLights[i].visible;
@@ -148,6 +155,11 @@ function handleKeyboardInput() {
       case "e":
       case "E":
         currentMaterialType = "toon";
+        updateMaterial = true;
+        break;
+      case "r":
+      case "R":
+        currentMaterialType = "basic";
         updateMaterial = true;
         break;
     }
@@ -204,7 +216,6 @@ function loadTextures() {
   loader.load(
     localImageUrl,
     function (texture) {
-      // If the local image loads successfully
       heightmapTexture = texture;
       heightMapData = getHeightMapData(heightmapTexture.image);
       createTerrain();
@@ -212,7 +223,6 @@ function loadTextures() {
     },
     undefined,
     function (error) {
-      // If the local image fails to load, try the remote image
       loader.load(remoteImageUrl, function (texture) {
         heightmapTexture = texture;
         heightMapData = getHeightMapData(heightmapTexture.image);
@@ -221,6 +231,8 @@ function loadTextures() {
       });
     }
   );
+
+  createSkydome();
 }
 
 function getHeightMapData(img) {
@@ -245,7 +257,6 @@ function getHeightMapData(img) {
 }
 
 function createFieldTexture() {
-  // Textura do campo floral
   const fieldCanvas = document.createElement("canvas");
   fieldCanvas.width = 512;
   fieldCanvas.height = 512;
@@ -290,22 +301,21 @@ function createSkyTexture() {
   currentTexture = skyTexture;
 }
 
-// Create the geometry using heightmap and texture
 function createTerrain() {
   let geometry = new THREE.PlaneBufferGeometry(50, 50, 256, 256);
-
   let positionArray = geometry.attributes.position.array;
   for (let i = 0; i < positionArray.length; i += 3) {
     positionArray[i + 2] = heightMapData[i / 3] * 0.1;
   }
-
-  geometry.rotateX(-Math.PI / 2); // Rotate the geometry so it lies in the xOz plane
-  material_terrain = new THREE.MeshPhongMaterial();
-  terrain = new THREE.Mesh(geometry, material_terrain);
+  geometry.computeVertexNormals();
+  geometry.rotateX(-Math.PI / 2);
+  geometry.rotateY(Math.PI / 3);
+  material_terrain = new THREE.MeshPhongMaterial({ side: THREE.DoubleSide });
   if (currentTexture == fieldTexture) {
     material_terrain.map = currentTexture;
   }
   terrain = new THREE.Mesh(geometry, material_terrain);
+  terrain.receiveShadow = true;
 
   scene.add(terrain);
 }
@@ -359,6 +369,16 @@ function updateSceneObjectsMaterial() {
             ...(transparent && { transparent }),
           });
           break;
+        case "basic":
+          object.material = new THREE.MeshBasicMaterial({
+            ...(color && { color }),
+            ...(emissive && { emissive }),
+            ...(side && { side }),
+            ...(map && { map }),
+            ...(opacity && { opacity }),
+            ...(transparent && { transparent }),
+          });
+          break;
       }
     }
   }
@@ -373,7 +393,6 @@ function createScene() {
   scene = new THREE.Scene();
   scene.position.set(0, -10, -10);
   scene.position.y = -10;
-  createSkydome();
 }
 
 function createCamera() {
@@ -384,7 +403,6 @@ function createCamera() {
     100
   );
   cameraPerspectiva.position.set(-5, 2, 10);
-  cameraPerspectiva.lookAt(0, 0, 0);
   camera = cameraPerspectiva;
 }
 
@@ -397,7 +415,7 @@ function createObjects() {
 
 function createHouse() {
   house = new THREE.Group();
-  house_position_x = 3;
+  house_position_x = 8;
   house_position_z = -2;
 
   const houseHeight = 5;
@@ -409,29 +427,37 @@ function createHouse() {
       house_position_z,
       heightmapTexture.image.width
     ) +
-    houseHalfHeight / 3;
+    houseHalfHeight / 2;
 
   // Wall vertices and indices
   let wallPoints = [
-    [-3.0, -1.5, 1.5], // Point 1
-    [3.0, -1.5, 1.5], // Point 2
-    [3.0, 1.5, 1.5], // Point 3
-    [-3.0, 1.5, 1.5], // Point 4
-    [-3.0, -1.5, -1.5], // Point 5
-    [3.0, -1.5, -1.5], // Point 6
-    [3.0, 1.5, -1.5], // Point 7
-    [-3.0, 1.5, -1.5], // Point 8
+    [-6.0, -1.5, 2], // Point 0
+    [3.0, -1.5, 2], // Point 1
+    [3.0, 1, 2], // Point 2
+    [-6.0, 1, 2], // Point 3
+    [-6.0, -1.5, -2], // Point 4
+    [3.0, -1.5, -2], // Point 5
+    [3.0, 1, -2], // Point 6
+    [-6.0, 1, -2], // Point 7
+    [-6.0, 2.0, 0], // Point 8: New point at (-6, 3, 0)
+    [3.0, 2.0, 0], // Point 9: New point at (3, 3, 0)
   ];
 
   let wallTriangles = [
-    [0, 1, 2], // Front face - Triangle 1
-    [0, 2, 3], // Front face - Triangle 2
-    [4, 5, 6], // Back face - Triangle 3
-    [4, 6, 7], // Back face - Triangle 4
-    [4, 0, 3], // Left face - Triangle 5
-    [4, 3, 7], // Left face - Triangle 6
-    [5, 1, 2], // Right face - Triangle 7
-    [5, 2, 6], // Right face - Triangle 8
+    [0, 1, 2],
+    [0, 2, 3],
+    [0, 4, 8],
+    [0, 8, 3],
+    [4, 8, 7],
+    [4, 5, 7],
+    [5, 6, 7],
+    [5, 6, 9],
+    [1, 2, 9],
+    [1, 9, 5],
+    [3, 2, 8],
+    [2, 8, 9],
+    [6, 7, 9],
+    [7, 9, 8],
   ];
 
   let wallVertices = new Float32Array(wallPoints.flat());
@@ -445,10 +471,10 @@ function createHouse() {
 
   // Door vertices and indices
   let doorPoints = [
-    [-0.25, -1.5, 1.51], // Point 1
-    [0.25, -1.5, 1.51], // Point 2
-    [0.25, 0.0, 1.51], // Point 3
-    [-0.25, 0.0, 1.51], // Point 4
+    [-0.35, -1.5, 2.01], // Point 1
+    [0.25, -1.5, 2.01], // Point 2
+    [0.25, 0.0, 2.01], // Point 3
+    [-0.35, 0.0, 2.01], // Point 4
   ];
   let doorTriangles = [
     [0, 1, 2], // Triangle 1
@@ -464,10 +490,10 @@ function createHouse() {
 
   // Window vertices and indices
   let windowPoints = [
-    [-0.25, 0.25, 1.51], // Point 1
-    [0.25, 0.25, 1.51], // Point 2
-    [0.25, 0.75, 1.51], // Point 3
-    [-0.25, 0.75, 1.51], // Point 4
+    [-0.5, -0.25, 2.01], // Point 1
+    [0.5, -0.25, 2.01], // Point 2
+    [0.5, 0.75, 2.01], // Point 3
+    [-0.5, 0.75, 2.01], // Point 4
   ];
   let windowTriangles = [
     [0, 1, 2], // Triangle 1
@@ -483,18 +509,19 @@ function createHouse() {
     .computeVertexNormals();
 
   let roofPoints = [
-    [-3.0, 1.5, 1.5], // Point 1
-    [3.0, 1.5, 1.5], // Point 2
-    [3.0, 1.5, -1.5], // Point 3
-    [-3.0, 1.5, -1.5], // Point 4
-    [0.0, 3.5, 0.0], // Point 5 (top of the roof)
+    [-6.0, 1.1, 2], // Point 0
+    [3.0, 1.1, 2], // Point 1
+    [3.0, 2.1, 0], // Point 2
+    [-6.0, 2.1, 0], // Point 3
+    [-6.0, 1.1, -2], // Point 4
+    [3.0, 1.1, -2], // Point 5
   ];
 
   let roofTriangles = [
-    [0, 1, 4], // Triangle 1
-    [1, 2, 4], // Triangle 2
-    [2, 3, 4], // Triangle 3
-    [3, 0, 4], // Triangle 4
+    [0, 1, 2], // Triangle 1
+    [0, 2, 3], // Triangle 2
+    [2, 5, 4],
+    [4, 3, 2],
   ];
   let roofVertices = new Float32Array(roofPoints.flat());
   let roofIndices = new Uint32Array(roofTriangles.flat());
@@ -504,14 +531,14 @@ function createHouse() {
     .setAttribute("position", new THREE.BufferAttribute(roofVertices, 3))
     .setIndex(new THREE.BufferAttribute(roofIndices, 1))
     .computeVertexNormals();
-  const chimneyFrontWidth = 0.4; // higher is smaller
+  const chimneyFrontWidth = 0.4;
   let chimneyPoints = [
-    [chimneyFrontWidth, 3.5, 0.3], // Point 1
-    [0.9, 3.5, 0.3], // Point 2
+    [chimneyFrontWidth, 2.5, 0.3], // Point 1
+    [0.9, 2.5, 0.3], // Point 2
     [0.9, 4.5, 0.3], // Point 3
     [chimneyFrontWidth, 4.5, 0.3], // Point 4
-    [chimneyFrontWidth, 3.5, -0.3], // Point 5
-    [0.9, 3.5, -0.3], // Point 6
+    [chimneyFrontWidth, 2.5, -0.3], // Point 5
+    [0.9, 2.5, -0.3], // Point 6
     [0.9, 4.5, -0.3], // Point 7
     [chimneyFrontWidth, 4.5, -0.3], // Point 8
   ];
@@ -538,7 +565,6 @@ function createHouse() {
     .setIndex(new THREE.BufferAttribute(chimneyIndices, 1))
     .computeVertexNormals();
 
-  // Cria o material para as formas
   const wallMaterial = new THREE.MeshToonMaterial({
     color: 0xffffff,
     side: THREE.DoubleSide,
@@ -559,24 +585,23 @@ function createHouse() {
   const windowThree = new THREE.Mesh(windowGeometry, windowMaterial);
   chimney = new THREE.Mesh(chimneyGeometry, chimneyMaterial);
 
-  // Posiciona as partes da casa
-  door.position.x = -1;
-  windowOne.position.x = -2.2;
-  windowTwo.position.x = 0.2;
-  windowThree.position.x = 1.5;
+  door.position.x = -0.5;
+  windowOne.position.x = -4.5;
+  windowTwo.position.x = 1;
+  windowThree.position.x = -2.5;
   chimney.position.set(0.5, -1.5, 0.8);
 
-  // Adiciona as partes da casa ao grupo
   house.add(wall);
   house.add(roof);
   house.add(door);
   house.add(windowOne);
   house.add(windowTwo);
   house.add(windowThree);
-  // createChimneySmoke();
+  createChimneySmoke();
 
   house.add(chimney);
   house.position.set(house_position_x, house_position_y, house_position_z);
+  house.rotation.y = -Math.PI / 2 + 0.05;
   scene.add(house);
   scene_objects.push(
     wall,
@@ -599,7 +624,9 @@ function createMoon() {
 }
 
 function createSkydome() {
-  // The additional two arguments define the vertical scale as a half-sphere
+  if (skydome) {
+    scene.remove(skydome);
+  }
   let hemisphereGeometry = new THREE.SphereGeometry(
     25,
     32,
@@ -620,22 +647,27 @@ function createSkydome() {
 }
 
 function createLighting() {
-  const lightIntensity = 0.5;
-  ambientLight = new THREE.AmbientLight(0x404040); // soft white light
+  ambientLight = new THREE.AmbientLight(0x404040);
   scene.add(ambientLight);
 
-  directionalLight = new THREE.DirectionalLight(0xffffcc, lightIntensity); //soft yellow
-  directionalLight.position.set(0, -10, 0).normalize();
+  directionalLight = new THREE.DirectionalLight(0xffffcc, 0.7);
+  directionalLight.position.set(8, 20, -7);
   directionalLight.visible = false;
+  directionalLight.castShadow = true;
   scene.add(directionalLight);
+
+  directionalLight.shadow.mapSize.width = 1024;
+  directionalLight.shadow.mapSize.height = 1024;
+  directionalLight.shadow.camera.near = 0.5;
+  directionalLight.shadow.camera.far = 500;
 }
 
 function createTree() {
   const tree = new THREE.Group();
-  const trunkHeight = Math.random() * (0.7 - 0.4) + 0.4; // random between 0.4 and 0.7
+  const trunkHeight = Math.random() * (0.7 - 0.4) + 0.4;
   const trunkGeometry = new THREE.CylinderGeometry(0.1, 0.1, trunkHeight);
   const branchGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1);
-  const branchMaterial = new THREE.MeshToonMaterial({ color: 0xcd853f }); // castanho-alaranjado
+  const branchMaterial = new THREE.MeshToonMaterial({ color: 0xcd853f });
 
   const trunk = new THREE.Mesh(trunkGeometry, branchMaterial);
   const mainBranch = new THREE.Mesh(branchGeometry, branchMaterial);
@@ -649,9 +681,9 @@ function createTree() {
   secondBranch.position.y = 1.5;
   secondBranch.rotation.z = Math.PI / 5;
 
-  const radiusX = 0.7; // Radius along the x-axis
-  const radiusY = 0.5; // Radius along the y-axis
-  const radiusZ = 0.8; // Radius along the z-axis
+  const radiusX = 0.7;
+  const radiusY = 0.5;
+  const radiusZ = 0.8;
   const widthSegments = 20;
   const heightSegments = 20;
 
@@ -662,17 +694,21 @@ function createTree() {
   );
   ellipsoidGeometry.scale(radiusX, radiusY, radiusZ);
 
-  // Create the ellipsoid mesh
   const ellipsoidMaterial = new THREE.MeshToonMaterial({ color: 0x003300 });
 
   const canopy1 = new THREE.Mesh(ellipsoidGeometry, ellipsoidMaterial);
-  canopy1.position.set(0.7, 2, -0.15); // Adjusted position to touch canopy2
-
+  canopy1.position.set(0.7, 2, -0.15);
   const canopy2 = new THREE.Mesh(ellipsoidGeometry, ellipsoidMaterial);
-  canopy2.position.set(-0.7, 2, -0.15); // Adjusted position to touch canopy1
-
+  canopy2.position.set(-0.7, 2, -0.15);
   const canopy3 = new THREE.Mesh(ellipsoidGeometry, ellipsoidMaterial);
   canopy3.position.set(0, 2.4, -0.15);
+
+  trunk.castShadow = true;
+  mainBranch.castShadow = true;
+  secondBranch.castShadow = true;
+  canopy1.castShadow = true;
+  canopy2.castShadow = true;
+  canopy3.castShadow = true;
 
   tree.add(trunk);
   tree.add(mainBranch);
@@ -710,7 +746,6 @@ function generateMultipleTrees() {
 
       validPosition =
         (z >= 5 && x <= 0) || x <= -2 || z >= 5 || x >= 10 || z <= -10;
-      // Check for overlap with existing trees
       for (let j = 0; j < tree_array.length; j++) {
         const existingTree = tree_array[j];
         const distance = tree.position.distanceTo(existingTree.position);
@@ -734,14 +769,12 @@ function generateMultipleTrees() {
 function createOvni() {
   ovni = new THREE.Group();
 
-  // Corpo do OVNI (esfera achatada)
   let bodyGeometry = new THREE.SphereGeometry(5, 32, 16);
   bodyGeometry.scale(1, 0.4, 1);
   let bodyMaterial = new THREE.MeshToonMaterial({ color: 0x000000 });
   let body = new THREE.Mesh(bodyGeometry, bodyMaterial);
   ovni.add(body);
 
-  // Cockpit (calote esférica)
   let cockpitGeometry = new THREE.SphereGeometry(
     3,
     32,
@@ -755,7 +788,6 @@ function createOvni() {
   let cockpit = new THREE.Mesh(cockpitGeometry, cockpitMaterial);
   ovni.add(cockpit);
 
-  // Cilindro achatado na parte de baixo
   let lightColor = 0xffffff;
   let cylinderGeometry = new THREE.CylinderGeometry(1, 1, 4, 8);
   let cylinderMaterial = new THREE.MeshToonMaterial({
@@ -767,28 +799,25 @@ function createOvni() {
   cylinder.position.y = -1;
   ovni.add(cylinder);
 
-  // Luzes pontuais nas pequenas esferas
-  // Lights
-
   let lightSphereMaterial = new THREE.MeshToonMaterial({
     color: lightColor,
-    transparent: true, // Habilita a transparência
-    opacity: 1, // Define a opacidade das esferas (0 = totalmente transparente, 1 = totalmente opaco)
+    transparent: true,
+    opacity: 1,
   });
-  let lightIntensity = 0.03;
+  let lightIntensity = 2;
   for (let i = 0; i < 12; i++) {
-    let light = new THREE.PointLight(0xffa500, lightIntensity);
+    let light = new THREE.PointLight(0xffa500, lightIntensity, 1.5);
     let lightSphereGeometry = new THREE.SphereGeometry(0.2);
     let lightSphere = new THREE.Mesh(lightSphereGeometry, lightSphereMaterial);
-    let theta = i * ((Math.PI * 2) / 12); // equally distribute lights
+    let theta = i * ((Math.PI * 2) / 12);
     lightSphere.position.set(
       3 * Math.cos(theta),
       -4 * 0.4,
       3 * Math.sin(theta)
     );
-    light.position.copy(lightSphere.position);
     ovni.add(lightSphere);
     scene_objects.push(lightSphere);
+    light.target = lightSphere;
     lightSphere.add(light);
     ovniLights.push(light);
   }
@@ -796,23 +825,15 @@ function createOvni() {
 
   spotLight = new THREE.SpotLight(0xffa500, 1, 0, Math.PI / 12);
   let spotLightTarget = new THREE.Object3D();
-  spotLightTarget.position.copy(terrain.position); // Definir a posição do chão como alvo
+  spotLightTarget.position.copy(terrain.position);
   cylinder.add(spotLightTarget);
   spotLight.target = spotLightTarget;
+  spotLight.castShadow = true;
   cylinder.add(spotLight);
 
-  // Movement and rotation
-  ovni.userData = {
-    moveLeft: false,
-    moveRight: false,
-    rotate: true,
-    lightsOn: true,
-    spotlightOn: true,
-  };
-  // Adjust the scale and position
   ovni.scale.set(0.25, 0.25, 0.25);
-  ovni.position.y = 9.5;
-  ovni.position.z = 6;
+  ovni.position.set(-2, 9.5, 6);
+
   scene.add(ovni);
   scene_objects.push(body, cockpit, cylinder);
 }
@@ -910,7 +931,7 @@ class SmokeParticle {
     this.position.add(this.velocity.clone().multiplyScalar(delta));
 
     if (this.position.y > 5.4) {
-      this.position.y = 4.3; // Adjust to the height of your chimney
+      this.position.y = 4.3;
     }
   }
 }
